@@ -250,8 +250,13 @@ func (a *App) Logger() logging.Logger {
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
-func (a *App) SubCommand(pattern string, handler Handler) {
-	a.cmd.addRoute(pattern, handler)
+func (a *App) SubCommand(pattern string, handler Handler, description ...string) {
+	desc := strings.Join(description, "\n")
+	a.cmd.addRoute(route{
+		pattern:     pattern,
+		handler:     handler,
+		description: desc,
+	})
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {

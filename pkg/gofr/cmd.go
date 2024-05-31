@@ -1,21 +1,25 @@
 package gofr
 
 import (
+	"fmt"
 	"os"
 	"regexp"
-
-	"gofr.dev/pkg/gofr/container"
+	"strings"
 
 	cmd2 "gofr.dev/pkg/gofr/cmd"
+	"gofr.dev/pkg/gofr/container"
 )
 
 type cmd struct {
-	routes []route
+	routes      []route
+	defaultHelp string // Default helper documentation
 }
 
 type route struct {
-	pattern string
-	handler Handler
+	pattern     string
+	handler     Handler
+	description string
+	help        string // Custom helper documentation for the sub-command
 }
 
 type ErrCommandNotFound struct{}
@@ -28,11 +32,15 @@ func (cmd *cmd) Run(c *container.Container) {
 	args := os.Args[1:] // First one is command itself
 	command := ""
 
-	// Removing all flags and putting everything else as a part of command.
-	// So, unlike native flag package we can put subcommands anywhere
+	showHelp := false
 	for _, a := range args {
 		if a == "" {
-			continue // This takes cares of cases where command has multiple space in between.
+			continue // This takes care of cases where command has multiple spaces in between.
+		}
+
+		if a == "-h" || a == "--help" {
+			showHelp = true
+			continue
 		}
 
 		if a[0] != '-' {
@@ -40,10 +48,17 @@ func (cmd *cmd) Run(c *container.Container) {
 		}
 	}
 
-	h := cmd.handler(command)
+	if showHelp || command == "" {
+		cmd.printHelp()
+		return
+	}
+
+	h := cmd.handler(strings.TrimSpace(command))
 	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), c)
 
 	if h == nil {
+		fmt.Println("Unknown command:", command)
+		cmd.printHelp()
 		ctx.responder.Respond(nil, ErrCommandNotFound{})
 		return
 	}
@@ -62,9 +77,18 @@ func (cmd *cmd) handler(path string) Handler {
 	return nil
 }
 
-func (cmd *cmd) addRoute(pattern string, handler Handler) {
-	cmd.routes = append(cmd.routes, route{
-		pattern: pattern,
-		handler: handler,
-	})
+func (cmd *cmd) addRoute(r route) {
+	cmd.routes = append(cmd.routes, r)
+}
+
+func (cmd *cmd) printHelp() {
+	fmt.Println("Available commands:")
+	for _, route := range cmd.routes {
+		help := route.help
+		if help == "" {
+			help = route.description // Use description if custom helper documentation is not provided
+		}
+		fmt.Printf("  %s: %s\n", route.pattern, help)
+	}
+	fmt.Println(cmd.defaultHelp) // Print default helper documentation if provided
 }
